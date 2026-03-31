@@ -24,8 +24,8 @@ These two kernel features work together to make a container:
 
   ┌────────────────────────┐           ┌────────────────────────┐
   │ PID:     own process   │           │ CPU:    max 2 cores    │
-  │          tree           │           │                        │
-  │ Mount:   own filesystem │           │ Memory: max 1 GB      │
+  │          tree          │           │                        │
+  │ Mount:   own filesystem│           │ Memory: max 1 GB       │
   │                        │           │                        │
   │ Network: own IP/ports  │           │ Disk:   limited I/O    │
   │                        │           │                        │

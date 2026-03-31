@@ -1,6 +1,7 @@
 # Image Layers and the Filesystem
 
-## How a Dockerfile Becomes the Container's Filesystem
+Now that we know a Dockerfile produces an image — let's look at how that
+image is structured internally.
 
 Each Dockerfile instruction that modifies files creates a **layer**. These
 layers stack up to form what the container sees as `/`.
@@ -11,11 +12,11 @@ layers stack up to form what the container sees as `/`.
   │ FROM ubuntu:22.04        │───────>│ Layer 1: base OS        │
   │ COPY ./app /app          │───────>│ Layer 2: app files      │
   │ RUN npm install          │───────>│ Layer 3: dependencies   │
-  │ CMD ["node", "app.js"]   │───────>│ Layer 4: config         │
+  │ CMD ["node", "app.js"]   │        │ (metadata only)         │
   └──────────────────────────┘        └─────────────────────────┘
 ```
 
-Note: `CMD` doesn't create a real filesystem layer — it only stores metadata.
+`CMD` doesn't create a real filesystem layer — it only stores metadata.
 Only instructions that modify files (`FROM`, `COPY`, `RUN`, `ADD`) create
 real layers.
 
@@ -89,12 +90,16 @@ same layer hashes at the bottom — proving they share layers on disk.
 Watch caching in action by building an image twice:
 
 ```bash
-echo 'FROM ubuntu:22.04
-RUN apt-get update
-COPY . /app' > /tmp/Dockerfile
+mkdir /tmp/cachetest && cd /tmp/cachetest
 
-docker build -t test1 -f /tmp/Dockerfile .
-docker build -t test2 -f /tmp/Dockerfile .
+cat > Dockerfile <<'EOF'
+FROM ubuntu:22.04
+RUN apt-get update
+COPY . /app
+EOF
+
+docker build -t test1 .
+docker build -t test2 .
 ```
 
 The second build is nearly instant — every layer comes from cache.
