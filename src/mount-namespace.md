@@ -76,3 +76,37 @@ This is why:
   container's isolated mount, not on the host
 - You need **volumes** or **bind mounts** to bridge the gap between the
   two views
+
+## See it yourself
+
+What the container sees as its root filesystem:
+
+```bash
+docker run -d --name mounttest nginx
+docker exec mounttest ls /
+# bin  dev  etc  home  lib  media  mnt  opt  proc  root  ...
+```
+
+Where those files actually live on the host:
+
+```bash
+docker inspect --format '{{.GraphDriver.Data.MergedDir}}' mounttest
+# /var/lib/docker/overlay2/abc123.../merged
+ls /var/lib/docker/overlay2/abc123.../merged/
+# bin  dev  etc  home  lib  media  mnt  opt  proc  root  ...
+```
+
+Same files. The container sees them at `/`. The host sees them at a
+nested overlay path. The mount namespace remaps the view.
+
+Create a file inside the container and verify it appears at the host path:
+
+```bash
+docker exec mounttest touch /tmp/hello
+ls /var/lib/docker/overlay2/abc123.../merged/tmp/
+# hello
+```
+
+The file exists on the host filesystem — the mount namespace just makes
+the container think `/tmp/hello` is at the root level, when it's actually
+buried deep in Docker's overlay directory.

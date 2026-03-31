@@ -61,20 +61,20 @@ The real costs are:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        VIRTUAL MACHINES                        │
+│                        VIRTUAL MACHINES                         │
 │                                                                 │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │     App A        │  │     App B        │  │     App C        │ │
-│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤ │
-│  │   Libraries /    │  │   Libraries /    │  │   Libraries /    │ │
-│  │   Dependencies   │  │   Dependencies   │  │   Dependencies   │ │
-│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤ │
-│  │   Guest OS       │  │   Guest OS       │  │   Guest OS       │ │
-│  │   (Kernel)       │  │   (Kernel)       │  │   (Kernel)       │ │
-│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤ │
-│  │  Virtualized     │  │  Virtualized     │  │  Virtualized     │ │
-│  │  Hardware        │  │  Hardware        │  │  Hardware        │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │     App A       │  │     App B       │  │     App C       │  │
+│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤  │
+│  │   Libraries /   │  │   Libraries /   │  │   Libraries /   │  │
+│  │   Dependencies  │  │   Dependencies  │  │   Dependencies  │  │
+│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤  │
+│  │   Guest OS      │  │   Guest OS      │  │   Guest OS      │  │
+│  │   (Kernel)      │  │   (Kernel)      │  │   (Kernel)      │  │
+│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤  │
+│  │  Virtualized    │  │  Virtualized    │  │  Virtualized    │  │
+│  │  Hardware       │  │  Hardware       │  │  Hardware       │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                     HYPERVISOR                                  │
@@ -83,7 +83,7 @@ The real costs are:
 │                     HOST OS (Kernel)                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                  PHYSICAL HARDWARE                              │
-│           (CPU with VT-x/AMD-V, RAM, Disk, NIC)                │
+│           (CPU with VT-x/AMD-V, RAM, Disk, NIC)                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

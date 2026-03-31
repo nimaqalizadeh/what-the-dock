@@ -70,3 +70,32 @@ independent view**. Each namespace (PID, mount, network, user) removes one
 more piece of visibility into the real host. Stack them all together and
 the process _behaves_ as if it has the machine to itself — even though
 it's just one process among thousands on the host.
+
+## See it yourself
+
+From the host, get the container's real PID:
+
+```bash
+docker run -d --name pidtest nginx
+docker inspect --format '{{.State.Pid}}' pidtest
+# 48372
+```
+
+Now ask the container what PID it thinks it is:
+
+```bash
+docker exec pidtest cat /proc/1/cmdline
+# nginx: master process ...
+```
+
+The container's main process sees itself as **PID 1**. The host sees it as
+**PID 48372**. Same process, two views — that's the PID namespace in action.
+
+You can also see the full process list from inside the container:
+
+```bash
+docker exec pidtest ps aux
+```
+
+Only nginx processes appear. The host's thousands of other processes are
+completely invisible — they exist in a different PID namespace.

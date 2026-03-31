@@ -38,4 +38,43 @@ Namespaces are the **walls** — they control what the process can see.
 Cgroups are the **rations** — they control how much the process can
 consume. You need both to make a container behave.
 
-You can even create a container without Docker using a single Linux command: `unshare`. The process thinks it's PID 1 on a fresh machine. Docker just wraps this in image management, networking, and a nice CLI.
+## See it yourself
+
+Set a memory limit and inspect the cgroup:
+
+```bash
+docker run -d --name limited --memory=256m nginx
+```
+
+Check the kernel-enforced limit:
+
+```bash
+docker inspect --format '{{.HostConfig.Memory}}' limited
+# 268435456  (256 MB in bytes)
+```
+
+On a Linux host, you can see the cgroup file directly:
+
+```bash
+cat /sys/fs/cgroup/docker/<container-id>/memory.max
+# 268435456
+```
+
+The kernel is enforcing that this process can't use more than 256 MB.
+Try to exceed it and the kernel kills the process (OOM killed).
+
+Set a CPU limit:
+
+```bash
+docker run -d --name cpulimited --cpus=0.5 nginx
+```
+
+This container can only use half a CPU core. Run a CPU-intensive process
+inside and watch `docker stats` — it won't exceed 50% of one core:
+
+```bash
+docker stats cpulimited --no-stream
+```
+
+Cgroups are the reason containers can't starve each other — the kernel
+enforces the limits regardless of what the process tries to do.

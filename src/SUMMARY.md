@@ -15,7 +15,6 @@
     - [The Shared Kernel Problem](./shared-kernel-problem.md)
     - [Containers on macOS and Windows](./containers-macos-windows.md)
     - [VMs vs Containers — The Key Insight](./vms-vs-containers.md)
-- [Seeing It With Your Own Eyes](./practical-guide.md)
 - [Understanding Docker Commands](./docker-commands.md)
     - [Image Commands and Layers](./image-commands.md)
     - [Container Lifecycle](./container-lifecycle.md)

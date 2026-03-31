@@ -64,3 +64,40 @@ are the **building blocks** that produce it.
   layer on disk, stored only once.
 - **Fast transfers** — when pushing/pulling images, only changed layers
   are transferred.
+
+## See it yourself
+
+Inspect the layers of any image:
+
+```bash
+docker history nginx
+```
+
+Output shows each layer, its size, and the command that created it. You
+can see exactly which Dockerfile instruction produced which layer.
+
+To see layers in more detail:
+
+```bash
+docker inspect nginx | jq '.[0].RootFS.Layers'
+```
+
+Each entry is a SHA256 hash of a layer. If you inspect two images that
+share the same base (e.g., both `FROM ubuntu:22.04`), you'll see the
+same layer hashes at the bottom — proving they share layers on disk.
+
+Watch caching in action by building an image twice:
+
+```bash
+echo 'FROM ubuntu:22.04
+RUN apt-get update
+COPY . /app' > /tmp/Dockerfile
+
+docker build -t test1 -f /tmp/Dockerfile .
+docker build -t test2 -f /tmp/Dockerfile .
+```
+
+The second build is nearly instant — every layer comes from cache.
+Change only the `COPY` line's content and rebuild: Docker reuses the
+cached `FROM` and `RUN` layers and only rebuilds from the changed layer
+onward.
