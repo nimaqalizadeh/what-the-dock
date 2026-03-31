@@ -1,5 +1,39 @@
 # Volumes
 
+## Why Volumes Exist — COPY vs Mounts
+
+In the image layers chapter we saw that `COPY` bakes files into the
+image at **build time**. It's a one-time snapshot — if you change
+`app.js` on your host afterwards, the image still has the old version.
+You'd need to rebuild the image to pick up changes.
+
+That works for production, where you want a self-contained image. But
+during development you want to edit code on your host and see changes
+inside the container **immediately**, without rebuilding.
+
+That's what volumes and bind mounts are for — they connect a directory
+on the host to a directory in the container at **runtime**, so both
+sides see the same files on disk:
+
+```
+  COPY (build time)              Bind mount (runtime)
+  ─────────────────              ────────────────────
+  One-time copy into             Kernel mount — same
+  the image layer.               files on disk.
+  No sync after build.           Live sync both ways.
+
+  Host: ./app/app.js             Host: ./app/app.js
+        │                              │
+        │ copied at build              │ mounted at runtime
+        ▼                              ▼
+  Image layer:                   Container:
+  /app/app.js (frozen)           /app/app.js (live)
+```
+
+- **`COPY`** — production. Image is self-contained, depends on nothing
+  from the host.
+- **Bind mount** — development. Fast iteration without rebuilding.
+
 ## `docker volume create mydata`
 
 Creates a named volume — a directory managed by Docker (typically at `/var/lib/docker/volumes/mydata/_data` on Linux). This directory persists independently of any container.

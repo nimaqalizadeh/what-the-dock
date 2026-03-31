@@ -11,6 +11,8 @@
   - [Cgroups — Resource Limits](./cgroups.md)
 - [From Dockerfile to Container](./from-dockerfile-to-container.md)
   - [Image Layers and the Filesystem](./image-layers.md)
+  - [Dockerfile Instructions](./dockerfile-instructions.md)
+  - [Optimizing Image Size](./optimizing-image-size.md)
 - [Understanding Docker Commands](./docker-commands.md)
   - [Image Commands and Layers](./image-commands.md)
   - [Container Lifecycle](./container-lifecycle.md)

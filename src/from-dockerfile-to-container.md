@@ -88,6 +88,35 @@ An image is **immutable** — once built, it never changes. You don't edit
 an image. If you need to change something, you update the Dockerfile and
 rebuild.
 
+An image is **not one big file**. It's a **manifest** — a blueprint that
+tells the Docker engine:
+
+1. **Which layers to stack**, and in what order (pointers to the layer
+   directories under `/var/lib/docker/overlay2/`)
+2. **How to configure the container** — the default command (`CMD`),
+   environment variables (`ENV`), working directory (`WORKDIR`), exposed
+   ports, and other metadata
+
+```
+  Image = manifest
+  ┌──────────────────────────────────────┐
+  │  Layers (in order):                  │
+  │    1. sha256:a3f2...  → overlay2/... │  ← Ubuntu base files
+  │    2. sha256:b7c1...  → overlay2/... │  ← app code
+  │    3. sha256:e9d4...  → overlay2/... │  ← node_modules
+  │                                      │
+  │  Config:                             │
+  │    CMD: ["node", "app.js"]           │
+  │    WORKDIR: /app                     │
+  │    ENV: NODE_ENV=production          │
+  └──────────────────────────────────────┘
+```
+
+When you run `docker run myapp`, Docker reads this manifest, stacks the
+layer directories with OverlayFS into one filesystem view, wraps the
+process in namespaces and cgroups, and starts the command from `CMD`.
+The image is the recipe — the container is the result of following it.
+
 ### See it yourself
 
 List your images:
@@ -116,10 +145,10 @@ the process defined by `CMD`.
 ```
   Image (read-only)           Container (running)
   ┌────────────────────┐      ┌────────────────────┐
-  │  Layer 3: app code │      │  Writable layer     │  ← changes go here
-  │  Layer 2: packages │      │  Layer 3: app code  │
-  │  Layer 1: base OS  │      │  Layer 2: packages  │
-  └────────────────────┘      │  Layer 1: base OS   │
+  │  Layer 3: app code │      │  Writable layer    │  ← changes go here
+  │  Layer 2: packages │      │  Layer 3: app code │
+  │  Layer 1: base OS  │      │  Layer 2: packages │
+  └────────────────────┘      │  Layer 1: base OS  │
                               └────────────────────┘
                               + PID namespace
                               + Mount namespace
@@ -131,6 +160,45 @@ Any files the container creates or modifies go into the writable layer.
 The image layers below remain untouched. When the container is removed,
 the writable layer is deleted — the image stays clean for the next
 container.
+
+### Multiple containers, one image — no copying
+
+When you run 10 containers from the same image, Docker does **not** copy
+the layers 10 times. The image layers sit on disk **once**, read-only
+and shared. Docker only creates one new writable layer per container:
+
+```
+Image layers (on disk ONCE, shared, read-only):
+  /var/lib/docker/overlay2/hash-A/    ← ubuntu base
+  /var/lib/docker/overlay2/hash-B/    ← app code
+  /var/lib/docker/overlay2/hash-C/    ← node_modules
+
+Container 1:                          Container 2:
+┌──────────────────────┐              ┌──────────────────────┐
+│ writable-layer-001   │ ← new       │ writable-layer-002   │ ← new
+│ (empty at start)     │              │ (empty at start)     │
+├──────────────────────┤              ├──────────────────────┤
+│ hash-C               │ ← shared    │ hash-C               │ ← same dir
+│ hash-B               │ ← shared    │ hash-B               │ ← same dir
+│ hash-A               │ ← shared    │ hash-A               │ ← same dir
+└──────────────────────┘              └──────────────────────┘
+```
+
+Both containers see `/bin/bash` — but it's the **same file on disk**,
+served through OverlayFS. When container 1 writes a new file, it goes
+into `writable-layer-001`. Container 2 never sees it — it has its own
+`writable-layer-002`.
+
+What if a container **modifies** an existing file, say `/etc/hosts`?
+OverlayFS does a **copy-on-write**: it copies that one file from the
+read-only layer into the container's writable layer, then applies the
+change there. The original in `hash-A` stays untouched. Every other
+container still sees the original.
+
+This is why `docker run` takes seconds — Docker doesn't build or copy
+anything. It tells OverlayFS "stack these existing directories, add a
+fresh writable layer on top," sets up namespaces and cgroups, and starts
+the process. Almost nothing to create.
 
 ### See it yourself
 
@@ -172,6 +240,7 @@ modified. New container, clean slate.
 ```
 
 This is why:
+
 - Changing code means **rebuilding the image** (not modifying a running
   container)
 - Multiple containers from the same image are identical at start
