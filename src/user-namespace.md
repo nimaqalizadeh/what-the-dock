@@ -8,7 +8,7 @@ User namespaces remap **user identities** between the container and the host.
   Inside container               On host
   ┌──────────────────────┐       ┌──────────────────────┐
   │                      │       │                      │
-  │       root           │       │       user            │
+  │       root           │       │       user           │
   │     (UID 0)          │──────>│     (UID 1000)       │
   │                      │       │                      │
   └──────────────────────┘       └──────────────────────┘
