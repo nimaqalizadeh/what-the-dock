@@ -13,10 +13,10 @@ have very different sizes:
 ```
 Base image              Size
 ──────────              ────
+rust:1.78               ~1.5 GB
+rust:1.78-slim          ~800 MB
+rust:1.78-alpine        ~900 MB
 ubuntu:22.04            ~77 MB
-node:20                 ~1 GB
-node:20-slim            ~200 MB
-node:20-alpine          ~130 MB
 alpine:3.19             ~5 MB
 distroless/static       ~2 MB
 ```
@@ -28,71 +28,97 @@ shell, no package manager, no `ls`, no `cat`. If an attacker breaks
 into the container, there are almost no tools to exploit.
 
 The trade-off: smaller bases have fewer built-in tools, which can make
-debugging harder. During development you might use `node:20`; for
-production you switch to `node:20-alpine` or a multi-stage build.
+debugging harder. But for Rust this matters less — once you compile a
+release binary, you often don't need the Rust toolchain at all in the
+final image. That's where multi-stage builds shine.
 
 ## Multi-Stage Builds
 
-A common problem: you need build tools (compilers, dev dependencies) to
-**build** your app, but you don't need them to **run** it. Without
-multi-stage builds, all those tools end up in the final image.
+A common problem: you need the full Rust toolchain (compiler, cargo,
+standard library) to **build** your app, but you don't need any of it
+to **run** the compiled binary. Without multi-stage builds, the entire
+~1.5 GB Rust image ends up in production.
 
 Multi-stage builds solve this by using multiple `FROM` instructions.
 Each one starts a new stage. Only the final stage becomes the image:
 
 ```dockerfile
 # Stage 1: build (thrown away)
-FROM node:20 AS build
+FROM rust:1.78 AS build
 COPY . /app
 WORKDIR /app
-RUN npm install && npm run build
+RUN cargo build --release
 
 # Stage 2: production (this becomes the image)
-FROM node:20-alpine
-COPY --from=build /app/dist /app
-CMD ["node", "/app/index.js"]
+FROM debian:bookworm-slim
+COPY --from=build /app/target/release/myapp /usr/local/bin/myapp
+CMD ["myapp"]
 ```
 
 What happens:
 
-1. Stage 1 uses the full `node:20` image (~1 GB) with all build tools.
-   It installs dependencies, compiles the code, produces `/app/dist`.
-2. Stage 2 starts fresh from `node:20-alpine` (~130 MB). It copies
-   **only** the built output from stage 1. No `node_modules`, no source
-   code, no build tools.
+1. Stage 1 uses the full `rust:1.78` image (~1.5 GB) with the entire
+   Rust toolchain. It compiles your code into a release binary.
+2. Stage 2 starts fresh from `debian:bookworm-slim` (~80 MB). It copies
+   **only** the compiled binary from stage 1. No Rust compiler, no
+   source code, no `target/` directory, no cargo registry cache.
 
 The final image is small and contains only what's needed to run.
+
+For even smaller images, if your Rust binary is statically linked
+(using `musl`), you can go all the way down to `scratch`:
+
+```dockerfile
+FROM rust:1.78 AS build
+RUN rustup target add x86_64-unknown-linux-musl
+COPY . /app
+WORKDIR /app
+RUN cargo build --release --target x86_64-unknown-linux-musl
+
+FROM scratch
+COPY --from=build /app/target/x86_64-unknown-linux-musl/release/myapp /myapp
+CMD ["/myapp"]
+```
+
+This produces an image that contains **nothing but your binary** — a
+few megabytes total.
 
 ### See it yourself
 
 ```bash
 mkdir /tmp/multistage && cd /tmp/multistage
 
-cat > app.js <<'EOF'
-console.log("hello from optimized image");
+cat > main.rs <<'EOF'
+fn main() {
+    println!("hello from optimized image");
+}
 EOF
 
 cat > Dockerfile.single <<'EOF'
-FROM node:20
-COPY app.js /app/app.js
-CMD ["node", "/app/app.js"]
+FROM rust:1.78
+COPY main.rs /app/main.rs
+WORKDIR /app
+RUN rustc main.rs -o myapp
+CMD ["./myapp"]
 EOF
 
 cat > Dockerfile.multi <<'EOF'
-FROM node:20 AS build
-COPY app.js /app/app.js
+FROM rust:1.78 AS build
+COPY main.rs /app/main.rs
+WORKDIR /app
+RUN rustc main.rs -o myapp
 
-FROM node:20-alpine
-COPY --from=build /app/app.js /app/app.js
-CMD ["node", "/app/app.js"]
+FROM debian:bookworm-slim
+COPY --from=build /app/myapp /usr/local/bin/myapp
+CMD ["myapp"]
 EOF
 
 docker build -t single-stage -f Dockerfile.single .
 docker build -t multi-stage -f Dockerfile.multi .
 
 docker images | grep stage
-# multi-stage     ~130 MB
-# single-stage    ~1 GB
+# multi-stage     ~80 MB
+# single-stage    ~1.5 GB
 ```
 
 Same app, dramatically different image size.
@@ -122,19 +148,21 @@ RUN apt-get update \
 ## Use .dockerignore
 
 `COPY . /app` copies **everything** in the build context into the
-image. Without a `.dockerignore` file, that includes `node_modules`,
-`.git`, test files, IDE configs — files that bloat the image and
+image. Without a `.dockerignore` file, that includes `target/`,
+`.git`, test fixtures, IDE configs — files that bloat the image and
 invalidate layer caches unnecessarily.
 
 Create a `.dockerignore` at the project root:
 
 ```
-node_modules
+target
 .git
 .env
 *.md
-test/
 ```
 
 This works like `.gitignore` — listed files are excluded from `COPY`
 and `ADD` instructions. The image only gets what it actually needs.
+Excluding `target/` is especially important for Rust projects — the
+build directory can be gigabytes in size and should be rebuilt inside
+the image anyway.

@@ -19,25 +19,25 @@ A Dockerfile is a **text file with build instructions** — a recipe that
 tells Docker how to assemble an image, step by step.
 
 ```dockerfile
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y nodejs npm
-COPY ./app /app
+FROM rust:1.78
+COPY . /app
 WORKDIR /app
-RUN npm install
-CMD ["node", "app.js"]
+RUN cargo build --release
+CMD ["./target/release/myapp"]
 ```
 
 Each line is an instruction:
 
-- **`FROM`** — start from an existing base image (here, Ubuntu 22.04).
-  Every Dockerfile starts with `FROM`. You're not building from scratch —
-  you're building on top of something.
-- **`RUN`** — execute a command inside the image during build time. This
-  is where you install dependencies, compile code, or set up the
-  environment. The result is saved as a new layer.
+- **`FROM`** — start from an existing base image (here, `rust:1.78` — a
+  Debian image with the Rust toolchain pre-installed). Every Dockerfile
+  starts with `FROM`. You're not building from scratch — you're building
+  on top of something.
 - **`COPY`** — copy files from your local machine into the image.
 - **`WORKDIR`** — set the working directory for subsequent instructions
   (like `cd` but persistent).
+- **`RUN`** — execute a command inside the image during build time. This
+  is where you compile code, install dependencies, or set up the
+  environment. The result is saved as a new layer.
 - **`CMD`** — the default command to run when a container starts from
   this image. This doesn't execute during build — it's stored as
   metadata for runtime.
@@ -101,14 +101,14 @@ tells the Docker engine:
   Image = manifest
   ┌──────────────────────────────────────┐
   │  Layers (in order):                  │
-  │    1. sha256:a3f2...  → overlay2/... │  ← Ubuntu base files
-  │    2. sha256:b7c1...  → overlay2/... │  ← app code
-  │    3. sha256:e9d4...  → overlay2/... │  ← node_modules
+  │    1. sha256:a3f2...  → overlay2/... │  ← Rust base + OS
+  │    2. sha256:b7c1...  → overlay2/... │  ← source code
+  │    3. sha256:e9d4...  → overlay2/... │  ← compiled binary
   │                                      │
   │  Config:                             │
-  │    CMD: ["node", "app.js"]           │
+  │    CMD: ["./target/release/myapp"]   │
   │    WORKDIR: /app                     │
-  │    ENV: NODE_ENV=production          │
+  │    ENV: RUST_LOG=info                │
   └──────────────────────────────────────┘
 ```
 
@@ -171,7 +171,7 @@ and shared. Docker only creates one new writable layer per container:
 Image layers (on disk ONCE, shared, read-only):
   /var/lib/docker/overlay2/hash-A/    ← ubuntu base
   /var/lib/docker/overlay2/hash-B/    ← app code
-  /var/lib/docker/overlay2/hash-C/    ← node_modules
+  /var/lib/docker/overlay2/hash-C/    ← compiled binary
 
 Container 1:                          Container 2:
 ┌──────────────────────┐              ┌──────────────────────┐

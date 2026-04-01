@@ -48,7 +48,7 @@ Every Dockerfile starts with `FROM`. It sets the **base image** — the
 starting filesystem that all subsequent instructions build on top of.
 
 - `FROM ubuntu:22.04` — Ubuntu with its core packages and libraries
-- `FROM node:20-alpine` — Alpine Linux with Node.js pre-installed
+- `FROM rust:1.78` — Debian with the Rust toolchain pre-installed
 - `FROM python:3.12-slim` — Debian slim with Python pre-installed
 - `FROM scratch` — literally empty, no OS at all (for static binaries)
 
@@ -87,8 +87,8 @@ the resulting filesystem changes as a new **read-only layer**.
 
 This is where you:
 - Install packages (`apt-get install`, `apk add`, `yum install`)
-- Download dependencies (`npm install`, `pip install`)
-- Compile code (`go build`, `make`)
+- Download dependencies (`cargo build`, `pip install`)
+- Compile code (`cargo build --release`, `go build`, `make`)
 - Create directories, set permissions, generate config files
 
 **Each `RUN` creates a layer.** Files created in one `RUN` and deleted in
@@ -149,7 +149,7 @@ Same timestamp every time — `RUN` executed once at build, not at runtime.
 
 ```dockerfile
 COPY ./src /app/src
-COPY package.json /app/package.json
+COPY Cargo.toml /app/Cargo.toml
 ```
 
 `COPY` takes files from your **build context** (the directory you passed
@@ -205,9 +205,9 @@ creates it.
 
 ```dockerfile
 WORKDIR /app
-COPY . .           # copies into /app/
-RUN npm install    # runs in /app/
-CMD ["node", "index.js"]  # starts in /app/
+COPY . .                          # copies into /app/
+RUN cargo build --release         # runs in /app/
+CMD ["./target/release/myapp"]    # starts in /app/
 ```
 
 Without `WORKDIR`, everything runs from `/` (the root). Using `WORKDIR`
@@ -221,7 +221,7 @@ instead.
 ## `CMD` — Default Runtime Command
 
 ```dockerfile
-CMD ["node", "app.js"]
+CMD ["./target/release/myapp"]
 ```
 
 `CMD` sets the **default command** that runs when a container starts.
@@ -230,10 +230,10 @@ image config.
 
 ```dockerfile
 # Exec form (preferred) — runs directly, no shell wrapping
-CMD ["node", "app.js"]
+CMD ["./target/release/myapp"]
 
 # Shell form — runs through /bin/sh -c
-CMD node app.js
+CMD ./target/release/myapp
 ```
 
 **Exec form is preferred** because:
@@ -252,10 +252,10 @@ docker run <image> [optional override]
                         if omitted, Docker uses the CMD from the Dockerfile
 ```
 
-Say your Dockerfile has `CMD ["node", "app.js"]`:
+Say your Dockerfile has `CMD ["./target/release/myapp"]`:
 
 ```bash
-docker run myapp                # runs: node app.js  (CMD from Dockerfile)
+docker run myapp                # runs: ./target/release/myapp (CMD from Dockerfile)
 docker run myapp bash           # runs: bash          (CMD ignored)
 docker run myapp ls /app        # runs: ls /app       (CMD ignored)
 docker run myapp cat /etc/hosts # runs: cat /etc/hosts(CMD ignored)
@@ -297,13 +297,22 @@ docker run --rm cmd-test echo "overridden"
 ## `ENTRYPOINT` — The Fixed Command
 
 ```dockerfile
-ENTRYPOINT ["node"]
-CMD ["app.js"]
+ENTRYPOINT ["./target/release/myapp"]
+CMD ["--port", "8080"]
 ```
 
-`ENTRYPOINT` sets a command that **always runs** — it can't be easily
-overridden from the command line. `CMD` then provides **default
-arguments** to the entrypoint.
+`ENTRYPOINT` sets a command that **always runs** — unlike `CMD`, it
+doesn't get replaced when you pass arguments to `docker run`. `CMD`
+then provides **default arguments** to the entrypoint.
+
+`ENTRYPOINT` *can* be overridden, but you have to be explicit about it:
+
+```bash
+docker run --entrypoint /bin/sh myapp
+```
+
+This replaces the entrypoint entirely. Without `--entrypoint`, the
+entrypoint always runs — that's the key difference from `CMD`.
 
 ```
   ENTRYPOINT = the verb (always runs)
@@ -313,8 +322,8 @@ arguments** to the entrypoint.
 With the Dockerfile above:
 
 ```bash
-docker run myapp           # runs: node app.js
-docker run myapp server.js # runs: node server.js (CMD overridden)
+docker run myapp                    # runs: ./target/release/myapp --port 8080
+docker run myapp --port 3000        # runs: ./target/release/myapp --port 3000 (CMD overridden)
 ```
 
 This pattern is useful when your image is a **tool** — the entrypoint
@@ -334,7 +343,7 @@ docker run mycurl https://google.com     # curl -s https://google.com
 ## `ENV` — Environment Variables
 
 ```dockerfile
-ENV NODE_ENV=production
+ENV RUST_LOG=info
 ENV DB_HOST=localhost DB_PORT=5432
 ```
 
@@ -351,7 +360,7 @@ COPY . $APP_HOME       # uses the variable
 Environment variables can be **overridden** at runtime:
 
 ```bash
-docker run -e NODE_ENV=development myapp
+docker run -e RUST_LOG=debug myapp
 ```
 
 ### See it yourself
@@ -392,16 +401,16 @@ Think of `EXPOSE` as a comment that tooling can read.
 ## `ARG` — Build-Time Variables
 
 ```dockerfile
-ARG NODE_VERSION=20
-FROM node:${NODE_VERSION}-alpine
+ARG RUST_VERSION=1.78
+FROM rust:${RUST_VERSION}
 ```
 
 `ARG` defines a variable that's only available **during build** — not
 at runtime. Use it to parameterize your Dockerfile:
 
 ```bash
-docker build --build-arg NODE_VERSION=18 -t myapp .
-docker build --build-arg NODE_VERSION=20 -t myapp .
+docker build --build-arg RUST_VERSION=1.77 -t myapp .
+docker build --build-arg RUST_VERSION=1.78 -t myapp .
 ```
 
 Key difference from `ENV`:

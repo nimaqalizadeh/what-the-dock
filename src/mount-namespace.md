@@ -61,7 +61,7 @@ silently translates the path. The container has no idea.
 
   /                    -->  /var/lib/docker/overlay2/abc123/
   /etc/config.json     -->  /var/lib/docker/overlay2/abc123/etc/config.json
-  /usr/bin/node        -->  /var/lib/docker/overlay2/abc123/usr/bin/node
+  /usr/bin/myapp       -->  /var/lib/docker/overlay2/abc123/usr/bin/myapp
 ```
 
 Same trick as PID — the process is PID 48372 on the host but sees itself
