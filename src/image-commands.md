@@ -43,33 +43,24 @@ This is why **instruction order in your Dockerfile matters enormously** for buil
 
 ### Bad order — slow builds
 
+```dockerfile
+FROM rust:1.78
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+CMD ["./target/release/myapp"]
 ```
-Dockerfile instruction              Layer on disk                              What it contains
-───────────────────────────────────────────────────────────────────────────────────────────────────────
-FROM rust:1.78                   →  overlay2/abc123.../diff/                →  /bin, /etc, /usr, /usr/local/cargo/...
-                                    Pulls Debian with the Rust 1.78 toolchain pre-installed.
-                                    Without this, you'd install the OS and Rust manually.
 
-WORKDIR /app                     →  (no layer — metadata only)              →  Sets working directory to /app
-                                    Creates /app if it doesn't exist. All subsequent commands run from /app.
-                                    Without this, files scatter across / (root):
-                                      With WORKDIR /app:      Without WORKDIR:
-                                      /app/Cargo.toml         /Cargo.toml
-                                      /app/src/main.rs        /src/main.rs
-                                      /app/target/            /target/        (mixed with OS files)
-
-COPY . .                         →  overlay2/def456.../diff/                →  /app/src/main.rs, /app/src/...
-                                    Copies EVERYTHING from host build context (first .) to container's
-                                    WORKDIR (second . = /app). Code changes every time → layer invalidated.
-
-RUN cargo build --release        →  overlay2/ghi789.../diff/                →  /app/target/release/myapp
-                                    Forced to recompile everything, even if dependencies didn't change.
-
-CMD ["./target/release/myapp"]   →  (no layer — metadata only)              →  Stored in image JSON config
-                                    Not run during build. Executed when container starts as PID 1.
-```
+| Instruction                      | Layer?        | What it does                                                                      |
+| -------------------------------- | ------------- | --------------------------------------------------------------------------------- |
+| `FROM rust:1.78`                 | Yes           | Pulls Debian with Rust toolchain. Becomes the base layer.                         |
+| `WORKDIR /app`                   | No (metadata) | Sets working directory. Without it, files scatter across `/` mixed with OS files. |
+| `COPY . .`                       | Yes           | Copies **everything** from host into `/app`. Changes every time you edit code.    |
+| `RUN cargo build --release`      | Yes           | Compiles the project. Forced to redo everything, even if only code changed.       |
+| `CMD ["./target/release/myapp"]` | No (metadata) | Stored in image config. Runs when container starts, not during build.             |
 
 Cache result with bad order:
+
 ```
 Layer 1: FROM rust:1.78           ✓ cached
 Layer 2: COPY . .                 ✗ INVALIDATED (you changed a line of code)
@@ -126,9 +117,9 @@ Layers are identified by their **SHA256 hash**. If two images share the same bas
 ```
 Image A (Rust API):                 Image B (Rust Worker):
 ┌─────────────────────┐             ┌─────────────────────┐
-│ Layer 5: API binary  │             │ Layer 5: Worker bin  │
-│ Layer 4: cargo build │             │ Layer 4: cargo build │
-│ Layer 3: Cargo.toml  │             │ Layer 3: Cargo.toml  │
+│ Layer 5: API binary │             │ Layer 5: Worker bin │
+│ Layer 4: cargo build│             │ Layer 4: cargo build│
+│ Layer 3: Cargo.toml │             │ Layer 3: Cargo.toml │
 ├─────────────────────┤             ├─────────────────────┤
 │ Layer 2: WORKDIR    │  ── same ── │ Layer 2: WORKDIR    │
 │ Layer 1: rust:1.78  │  ── same ── │ Layer 1: rust:1.78  │
@@ -137,6 +128,7 @@ Image A (Rust API):                 Image B (Rust Worker):
 ```
 
 This means:
+
 - **Disk space** — 10 images from `rust:1.78` don't store 10 copies of the base. One copy, shared.
 - **Pulling images** — `docker pull` only downloads layers you don't already have. If you already have `rust:1.78` locally, pulling a new image built on it only downloads the unique layers.
 - **Pushing images** — same in reverse. The registry already has the shared layers; only your new layers are uploaded.
